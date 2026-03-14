@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CosmosTracker — Planetary Proximity</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   CSS VARIABLES — FULL DARK / LIGHT THEMING
+   ========================================================= */
+:root {
+  --bg:           #00010f;
+  --bg2:          #050520;
+  --bg3:          #0a0a2e;
+  --text:         #dde8ff;
+  --text-dim:     #667799;
+  --accent:       #00d4ff;
+  --green:        #39ff14;
+  --orange:       #ff6b35;
+  --red:          #ff3355;
+  --yellow:       #ffd700;
+  --border:       rgba(0,212,255,0.18);
+  --border-dim:   rgba(255,255,255,0.05);
+  --sidebar-bg:   rgba(2,2,22,0.93);
+  --card-bg:      rgba(5,5,32,0.88);
+  --header-bg:    rgba(0,1,15,0.95);
+  --scanline:     rgba(0,0,0,0.035);
+  --sun-glow:     rgba(255,180,0,0.18);
+  --shadow:       0 0 20px rgba(0,212,255,0.08);
+}
+
+[data-theme="light"] {
+  --bg:           #eef0fc;
+  --bg2:          #dde0f5;
+  --bg3:          #ccd0ee;
+  --text:         #111436;
+  --text-dim:     #4455aa;
+  --accent:       #0055cc;
+  --green:        #006600;
+  --orange:       #cc4400;
+  --red:          #aa0022;
+  --yellow:       #886600;
+  --border:       rgba(0,80,180,0.22);
+  --border-dim:   rgba(0,0,0,0.06);
+  --sidebar-bg:   rgba(230,232,248,0.96);
+  --card-bg:      rgba(210,215,245,0.92);
+  --header-bg:    rgba(220,224,252,0.97);
+  --scanline:     rgba(0,0,0,0.015);
+  --sun-glow:     rgba(255,200,0,0.10);
+  --shadow:       0 0 20px rgba(0,80,180,0.08);
+}
+
+/* =========================================================
+   RESET & BASE
+   ========================================================= */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+
+html { font-size:14px; }
+
+body {
+  font-family:'Rajdhani',sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Scanline CRT overlay */
+body::after {
+  content:'';
+  position:fixed; inset:0;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--scanline) 0px,
+    var(--scanline) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events:none;
+  z-index:9000;
+}
+
+/* =========================================================
+   SCROLLBARS
+   ========================================================= */
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+#header {
+  position:fixed; top:0; left:0; right:0; height:48px;
+  background: var(--header-bg);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px;
+  padding:0 14px;
+  z-index:200;
+  backdrop-filter:blur(12px);
+}
+
+#logo {
+  font-family:'Share Tech Mono',monospace;
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:3px;
+  color:var(--accent);
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+#logo em { color:var(--green); font-style:normal; }
+
+#sim-date {
+  font-family:'Share Tech Mono',monospace;
+  font-size:11px;
+  color:var(--accent);
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  padding:3px 9px;
+  border-radius:3px;
+  white-space:nowrap;
+  letter-spacing:1px;
+}
+
+.hbtn {
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:4px 9px;
+  cursor:pointer;
+  border-radius:3px;
+  transition:all .15s;
+  white-space:nowrap;
+  letter-spacing:1px;
+}
+.hbtn:hover { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+.hbtn.active { background:var(--green); color:#000; border-color:var(--green); }
+
+#header-spacer { flex:1; }
+
+/* =========================================================
+   APP LAYOUT
+   ========================================================= */
+#app {
+  display:flex;
+  height:100dvh;
+  padding-top:48px;
+}
+
+/* =========================================================
+   SIDEBARS
+   ========================================================= */
+.sidebar {
+  width:255px;
+  min-width:255px;
+  background:var(--sidebar-bg);
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  z-index:100;
+  backdrop-filter:blur(14px);
+}
+#sb-left  { border-right:1px solid var(--border); }
+#sb-right { border-left:1px solid var(--border); }
+
+/* =========================================================
+   PANELS
+   ========================================================= */
+.panel {
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:10px;
+  flex-shrink:0;
+}
+
+.panel-title {
+  font-family:'Share Tech Mono',monospace;
+  font-size:9px;
+  color:var(--accent);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  margin-bottom:8px;
+  display:flex; align-items:center; gap:5px;
+}
+.panel-title::before { content:'▶'; font-size:7px; opacity:.7; }
+
+.panel-title.green  { color:var(--green); }
+.panel-title.orange { color:var(--orange); }
+
+/* =========================================================
+   CLOSEST PLANET CALLOUT
+   ========================================================= */
+#panel-closest { border-color:var(--green); }
+
+#closest-name {
+  font-size:24px;
+  font-weight:700;
+  color:var(--green);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  line-height:1;
+  margin-bottom:3px;
+}
+#closest-dist {
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  color:var(--text-dim);
+}
+#closest-dist span { color:var(--green); }
+
+/* =========================================================
+   PLANET DISTANCE LIST
+   ========================================================= */
+.prow {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 3px;
+  border-bottom:1px solid var(--border-dim);
+  cursor:pointer;
+  transition:background .1s;
+  border-radius:2px;
+}
+.prow:last-child { border-bottom:none; }
+.prow:hover { background:rgba(0,212,255,0.06); }
+.prow.is-closest { background:rgba(57,255,20,0.04); }
+
+.prow-rank {
+  font-family:'Share Tech Mono',monospace;
+  font-size:8px;
+  color:var(--text-dim);
+  width:13px;
+}
+.prow-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.prow-name { font-size:12px; font-weight:600; flex:1; }
+.prow-dists {
+  text-align:right;
+  font-family:'Share Tech Mono',monospace;
+  font-size:9px;
+  color:var(--text-dim);
+  line-height:1.4;
+}
+
+/* =========================================================
+   PLANET INFO CARD
+   ========================================================= */
+#planet-card { display:none; }
+#planet-card.open { display:block; }
+
+#card-name {
+  font-size:20px; font-weight:700;
+  letter-spacing:1px;
+  margin-bottom:4px;
+}
+#card-desc {
+  font-size:11px;
+  color:var(--text-dim);
+  line-height:1.55;
+  margin-bottom:8px;
+}
+.cstat {
+  display:flex; justify-content:space-between;
+  font-size:11px;
+  padding:3px 0;
+  border-bottom:1px solid var(--border-dim);
+}
+.cstat:last-child { border-bottom:none; }
+.cstat-k { font-family:'Share Tech Mono',monospace; color:var(--text-dim); font-size:9px; letter-spacing:1px; }
+.cstat-v { font-weight:600; font-size:11px; }
+
+#card-close {
+  display:block;
+  margin-top:9px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:9px;
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--text-dim);
+  padding:4px 10px;
+  cursor:pointer;
+  border-radius:2px;
+  width:100%;
+  text-align:center;
+  letter-spacing:1px;
+  transition:all .15s;
+}
+#card-close:hover { border-color:var(--red); color:var(--red); }
+
+/* =========================================================
+   SPEED PANEL
+   ========================================================= */
+#speed-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:7px;
+}
+#speed-label { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-dim); }
+#speed-val   { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--accent); }
+
+input[type=range] {
+  -webkit-appearance:none;
+  width:100%;
+  height:4px;
+  background:var(--border);
+  border-radius:2px;
+  outline:none;
+  cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:14px; height:14px;
+  border-radius:50%;
+  background:var(--accent);
+  cursor:pointer;
+  border:2px solid var(--bg2);
+  transition:background .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { background:var(--green); }
+
+/* =========================================================
+   NEO FEED
+   ========================================================= */
+.neo-item {
+  padding:6px 0;
+  border-bottom:1px solid var(--border-dim);
+}
+.neo-item:last-child { border-bottom:none; }
+
+.neo-header { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.neo-name {
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  color:var(--orange);
+  word-break:break-all;
+  flex:1;
+}
+.neo-badge {
+  font-family:'Share Tech Mono',monospace;
+  font-size:8px;
+  padding:1px 5px;
+  border-radius:2px;
+  flex-shrink:0;
+}
+.neo-badge.hz { background:var(--red); color:#fff; }
+.neo-badge.ok { background:var(--green); color:#000; }
+
+.neo-info {
+  font-family:'Share Tech Mono',monospace;
+  font-size:9px;
+  color:var(--text-dim);
+  margin-top:3px;
+  line-height:1.7;
+}
+
+/* =========================================================
+   ALERTS LOG
+   ========================================================= */
+#alerts-wrap {
+  max-height:180px;
+  overflow-y:auto;
+}
+.alog {
+  font-family:'Share Tech Mono',monospace;
+  font-size:9px;
+  padding:3px 0;
+  border-bottom:1px solid var(--border-dim);
+  line-height:1.5;
+}
+.alog:last-child { border-bottom:none; }
+.alog.info    { color:var(--text-dim); }
+.alog.ok      { color:var(--green); }
+.alog.warn    { color:var(--orange); }
+.alog.danger  { color:var(--red); }
+
+/* =========================================================
+   CANVAS AREA
+   ========================================================= */
+#canvas-wrap {
+  flex:1;
+  position:relative;
+  overflow:hidden;
+  min-width:0;
+}
+#solar-canvas {
+  display:block;
+  width:100%;
+  height:100%;
+}
+
+/* =========================================================
+   DATA BADGE
+   ========================================================= */
+#data-badge {
+  position:fixed;
+  bottom:7px;
+  left:50%;
+  transform:translateX(-50%);
+  font-family:'Share Tech Mono',monospace;
+  font-size:8px;
+  color:var(--text-dim);
+  background:var(--sidebar-bg);
+  border:1px solid var(--border);
+  padding:3px 12px;
+  border-radius:3px;
+  z-index:500;
+  text-align:center;
+  opacity:.75;
+  white-space:nowrap;
+  backdrop-filter:blur(8px);
+}
+
+/* =========================================================
+   PULSE ANIMATION
+   ========================================================= */
+@keyframes pulse {
+  0%,100% { opacity:1; }
+  50%      { opacity:.3; }
+}
+.pulse { animation:pulse 1.2s infinite; }
+
+/* =========================================================
+   MOBILE  ≤ 600px
+   ========================================================= */
+@media (max-width:600px) {
+  #header { gap:6px; padding:0 9px; height:44px; }
+  #logo { font-size:13px; letter-spacing:2px; }
+  #sim-date { font-size:9px; padding:2px 6px; }
+  .hbtn { font-size:8px; padding:3px 6px; }
+
+  #app {
+    flex-direction:column;
+    height:100dvh;
+    padding-top:44px;
+  }
+
+  /* Canvas takes remaining space */
+  #canvas-wrap { order:1; flex:1; min-height:0; }
+
+  /* Sidebars become horizontal strip */
+  .sidebar {
+    width:100%;
+    min-width:unset;
+    height:auto;
+    max-height:38vh;
+    flex-direction:row;
+    overflow-x:auto;
+    overflow-y:hidden;
+    flex-wrap:nowrap;
+    padding:7px;
+    gap:7px;
+    order:2;
+  }
+  #sb-left  { border-right:none; border-top:1px solid var(--border); }
+  #sb-right { border-left:none;  border-top:1px solid var(--border); order:3; }
+
+  .panel { min-width:195px; }
+
+  #closest-name { font-size:18px; }
+  .prow-name    { font-size:11px; }
+  .neo-name     { font-size:9px; }
+
+  #data-badge {
+    bottom:calc(38vh + 38vh + 6px);
+    font-size:7px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- =========================================================
+     HEADER
+     ========================================================= -->
+<header id="header">
+  <div id="logo">COSMOS<em>TRACKER</em></div>
+  <div id="sim-date">SIM DATE: ----</div>
+  <button class="hbtn" id="btn-today" title="Snap to real current date">TODAY</button>
+  <div id="header-spacer"></div>
+  <button class="hbtn" id="btn-theme">☀ LIGHT</button>
+  <button class="hbtn" id="btn-notif">🔔 ALERTS</button>
+</header>
+
+<!-- =========================================================
+     APP
+     ========================================================= -->
+<div id="app">
+
+  <!-- ── LEFT SIDEBAR ── -->
+  <aside class="sidebar" id="sb-left">
+
+    <!-- Closest planet callout -->
+    <div class="panel" id="panel-closest">
+      <div class="panel-title green">Closest to Earth</div>
+      <div id="closest-name">—</div>
+      <div id="closest-dist"><span>Calculating…</span></div>
+    </div>
+
+    <!-- Planet distance rankings -->
+    <div class="panel">
+      <div class="panel-title">Planets by Distance</div>
+      <div id="planet-list"></div>
+    </div>
+
+    <!-- Planet info card (hidden until clicked) -->
+    <div class="panel" id="planet-card">
+      <div class="panel-title">Planet Data</div>
+      <div id="card-name"></div>
+      <div id="card-desc"></div>
+      <div id="card-stats"></div>
+      <button id="card-close">✕ CLOSE PANEL</button>
+    </div>
+
+    <!-- Speed control -->
+    <div class="panel">
+      <div class="panel-title">Simulation Speed</div>
+      <div id="speed-row">
+        <span id="speed-label">SPEED</span>
+        <span id="speed-val">—</span>
+      </div>
+      <input type="range" id="speed-slider" min="0" max="100" value="8">
+      <div style="display:flex;justify-content:space-between;margin-top:5px;font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-dim)">
+        <span>PAUSE</span><span>1d/s</span><span>30d/s</span><span>3yr/s</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── CANVAS ── -->
+  <div id="canvas-wrap">
+    <canvas id="solar-canvas"></canvas>
+  </div>
+
+  <!-- ── RIGHT SIDEBAR ── -->
+  <aside class="sidebar" id="sb-right">
+
+    <!-- NEO feed -->
+    <div class="panel">
+      <div class="panel-title orange">NASA NeoWs — Live</div>
+      <div id="neo-feed">
+        <div class="alog info pulse" id="neo-loading">▋ FETCHING NEO DATA…</div>
+      </div>
+    </div>
+
+    <!-- Proximity alerts log -->
+    <div class="panel">
+      <div class="panel-title">Proximity Alerts Log</div>
+      <div id="alerts-wrap">
+        <div class="alog ok">▶ SYSTEM ONLINE</div>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- Data badge -->
+<div id="data-badge">
+  POSITIONS: NASA JPL KEPLERIAN ELEMENTS (J2000) &nbsp;|&nbsp; NEOS: NASA NeoWs API — LIVE
+</div>
+
+<!-- =========================================================
+     JAVASCRIPT
+     ========================================================= -->
+<script>
+'use strict';
+
+/* ============================================================
+   PLANET DATA — NASA JPL Keplerian Elements (J2000 epoch)
+   Sources: https://ssd.jpl.nasa.gov/planets/approx_pos.html
+   ============================================================ */
+const PLANETS = {
+  mercury: {
+    name:'Mercury', color:'#a8a8a8', r:3.5,
+    // J2000.0 orbital elements
+    a:0.38709927,   e:0.20563593,   I:7.00497902,
+    L:252.25032350, wp:77.45779628, Om:48.33076593,
+    // Rates per Julian century
+    da:0.00000037,  de:0.00001906,  dI:-0.00594749,
+    dL:149472.67411175, dwp:0.16047689, dOm:-0.12534081,
+    // Info card
+    mass:'3.30 × 10²³ kg', radiusKm:'2,439 km', moons:0,
+    temp:'-180 → +430 °C', period:'87.97 days',
+    desc:'Smallest planet; extreme temperature swings; cratered surface. No atmosphere to retain heat. A Mercurian year is shorter than its own day.',
+  },
+  venus: {
+    name:'Venus', color:'#e8cda0', r:6,
+    a:0.72333566,   e:0.00677672,   I:3.39467605,
+    L:181.97909950, wp:131.60246718, Om:76.67984255,
+    da:0.00000390,  de:-0.00004107, dI:-0.00078890,
+    dL:58517.81538729, dwp:0.00268329, dOm:-0.27769418,
+    mass:'4.87 × 10²⁴ kg', radiusKm:'6,052 km', moons:0,
+    temp:'462 °C (avg)', period:'224.70 days',
+    desc:'Hottest planet via runaway greenhouse effect. Rotates retrograde. Surface pressure 90× Earth. Dense CO₂ cloud layers. Brightest natural object in the night sky after the Moon.',
+  },
+  earth: {
+    name:'Earth', color:'#4da6e8', r:6.5,
+    a:1.00000261,   e:0.01671123,   I:-0.00001531,
+    L:100.46457166, wp:102.93768193, Om:0.0,
+    da:0.00000562,  de:-0.00004392, dI:-0.01294668,
+    dL:35999.37244981, dwp:0.32327364, dOm:0.0,
+    mass:'5.97 × 10²⁴ kg', radiusKm:'6,371 km', moons:1,
+    temp:'15 °C (avg)', period:'365.25 days',
+    desc:'Our home. Only known planet with life. 71% surface water. Large Moon stabilizes axial tilt. Active plate tectonics. Strong magnetosphere shields from solar wind.',
+  },
+  mars: {
+    name:'Mars', color:'#cf6c3a', r:5,
+    a:1.52371034,   e:0.09339410,   I:1.84969142,
+    L:-4.55343205,  wp:-23.94362959, Om:49.55953891,
+    da:0.00001847,  de:0.00007882,  dI:-0.00813131,
+    dL:19140.30268499, dwp:0.44441088, dOm:-0.29257343,
+    mass:'6.39 × 10²³ kg', radiusKm:'3,390 km', moons:2,
+    temp:'-63 °C (avg)', period:'686.97 days',
+    desc:'Red Planet. Home to Olympus Mons (tallest volcano in solar system) and Valles Marineris (deepest canyon). Thin CO₂ atmosphere. Evidence of ancient liquid water.',
+  },
+  jupiter: {
+    name:'Jupiter', color:'#c88b3a', r:13,
+    a:5.20288700,   e:0.04838624,   I:1.30439695,
+    L:34.39644051,  wp:14.72847983, Om:100.47390909,
+    da:-0.00011607, de:-0.00013253, dI:-0.00183714,
+    dL:3034.74612775, dwp:0.21252668, dOm:0.20469106,
+    mass:'1.90 × 10²⁷ kg', radiusKm:'69,911 km', moons:95,
+    temp:'-145 °C (cloud tops)', period:'4,332.59 days',
+    desc:'Largest planet — 2× mass of all others combined. Great Red Spot: storm raging 400+ years. Intense magnetic field. Acts as the solar system\'s gravitational vacuum cleaner.',
+  },
+  saturn: {
+    name:'Saturn', color:'#e4d191', r:11,
+    a:9.53667594,   e:0.05386179,   I:2.48599187,
+    L:49.95424423,  wp:92.59887831, Om:113.66242448,
+    da:-0.00125060, de:-0.00050991, dI:0.00193609,
+    dL:1222.49362201, dwp:-0.41897216, dOm:-0.28867794,
+    mass:'5.68 × 10²⁶ kg', radiusKm:'58,232 km', moons:146,
+    temp:'-178 °C (cloud tops)', period:'10,759.22 days',
+    desc:'Iconic ring system of ice and rock fragments. Least dense planet — would float on water. Winds up to 1,800 km/h. Polar hexagonal jet-stream storm.',
+  },
+  uranus: {
+    name:'Uranus', color:'#7de8e8', r:9,
+    a:19.18916464,  e:0.04725744,   I:0.77263783,
+    L:313.23810451, wp:170.95427630, Om:74.01692503,
+    da:-0.00196176, de:-0.00004397, dI:-0.00242939,
+    dL:428.48202785, dwp:0.40805281, dOm:0.04240589,
+    mass:'8.68 × 10²⁵ kg', radiusKm:'25,362 km', moons:28,
+    temp:'-224 °C (avg)', period:'30,688.50 days',
+    desc:'Ice giant tilted 98° — orbits nearly on its side. Coldest planetary atmosphere in the solar system. Faint ring system. Rotates retrograde (east → west).',
+  },
+  neptune: {
+    name:'Neptune', color:'#4b70dd', r:9,
+    a:30.06992276,  e:0.00859048,   I:1.77004347,
+    L:-55.12002969, wp:44.96476227, Om:131.78422574,
+    da:0.00026291,  de:0.00005105,  dI:0.00035372,
+    dL:218.45945325, dwp:-0.32241464, dOm:-0.00508664,
+    mass:'1.02 × 10²⁶ kg', radiusKm:'24,622 km', moons:16,
+    temp:'-214 °C (avg)', period:'60,195.00 days',
+    desc:'Strongest winds (up to 2,100 km/h). Takes 165 years to orbit the Sun. Only planet predicted mathematically before it was observed. Great Dark Spot storm system.',
+  },
+};
+
+const PKEYS = ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
+
+/* ============================================================
+   ORBITAL MECHANICS
+   ============================================================ */
+const DEG = Math.PI / 180;
+
+function julianDate(d) {
+  // JD from JS Date
+  return d.getTime() / 86400000.0 + 2440587.5;
+}
+
+function normDeg(d) {
+  return ((d % 360) + 360) % 360;
+}
+
+// Solve Kepler's equation M = E - e*sin(E) via Newton-Raphson
+function kepler(M, e) {
+  let E = M;
+  for (let i = 0; i < 60; i++) {
+    const dE = (M - E + e * Math.sin(E)) / (1.0 - e * Math.cos(E));
+    E += dE;
+    if (Math.abs(dE) < 1e-11) break;
+  }
+  return E;
+}
+
+// Returns heliocentric ecliptic (x, y) in AU
+function planetPos(key, date) {
+  const p = PLANETS[key];
+  const T = (julianDate(date) - 2451545.0) / 36525.0; // Julian centuries from J2000
+
+  const a  = p.a  + p.da  * T;
+  const e  = p.e  + p.de  * T;
+  const I  = (p.I  + p.dI  * T) * DEG;
+  const L  = normDeg(p.L  + p.dL  * T) * DEG;
+  const wp = (p.wp + p.dwp * T) * DEG; // longitude of perihelion
+  const Om = (p.Om + p.dOm * T) * DEG; // longitude of ascending node
+
+  const w = wp - Om; // argument of perihelion
+
+  // Mean anomaly (radians, normalised to -π…π)
+  let M = L - wp;
+  M = ((M + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+
+  const E  = kepler(M, e);
+  const nu = 2.0 * Math.atan2(
+    Math.sqrt(1 + e) * Math.sin(E / 2),
+    Math.sqrt(1 - e) * Math.cos(E / 2)
+  );
+  const r = a * (1 - e * Math.cos(E));
+
+  // Transform to ecliptic frame
+  const cosOm = Math.cos(Om), sinOm = Math.sin(Om);
+  const cosw  = Math.cos(w),  sinw  = Math.sin(w);
+  const cosI  = Math.cos(I);
+  const cosNu = Math.cos(nu), sinNu = Math.sin(nu);
+
+  const xo = r * cosNu;
+  const yo = r * sinNu;
+
+  const x = (cosOm * cosw - sinOm * sinw * cosI) * xo
+          + (-cosOm * sinw - sinOm * cosw * cosI) * yo;
+  const y = (sinOm * cosw + cosOm * sinw * cosI) * xo
+          + (-sinOm * sinw + cosOm * cosw * cosI) * yo;
+
+  return { x, y };
+}
+
+// AU → million km
+function auToMkm(au) { return au * 149.598; }
+
+/* ============================================================
+   SIMULATION STATE
+   ============================================================ */
+let simDate     = new Date();
+let simSpeed    = 0;    // days per real second
+let lastTick    = performance.now();
+let positions   = {};
+let distances   = [];
+let closestKey  = null;
+let selectedKey = null;
+let hoveredKey  = null;
+let lightMode   = false;
+let notifsOn    = false;
+let neoList     = [];
+let frameN      = 0;
+
+// Close-approach thresholds (AU) — trigger alert when planet crosses inward
+const CLOSE_AU = {
+  mercury:0.45, venus:0.28, mars:0.55,
+  jupiter:4.2,  saturn:8.8, uranus:18.5, neptune:29.5,
+};
+const alertState = {};   // tracks whether planet is currently "in alert"
+
+/* ============================================================
+   CANVAS
+   ============================================================ */
+const canvas = document.getElementById('solar-canvas');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const wrap = document.getElementById('canvas-wrap');
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  initStars();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// Pixel scale: fit Neptune (30 AU) in viewport with padding
+function getScale() {
+  return Math.min(canvas.width, canvas.height) / 2 / 33;
+}
+
+function w2c(x, y) {
+  const s = getScale();
+  return { x: canvas.width / 2 + x * s, y: canvas.height / 2 - y * s };
+}
+
+/* -- Star field ------------------------------------------------ */
+let stars = [];
+function initStars() {
+  stars = Array.from({ length: 280 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.1 + 0.2,
+    a: 0.25 + Math.random() * 0.75,
+  }));
+}
+
+/* -- Helpers ---------------------------------------------------- */
+function hexBright(hex, amt) {
+  const r = Math.min(255, parseInt(hex.slice(1,3),16) + amt);
+  const g = Math.min(255, parseInt(hex.slice(3,5),16) + amt);
+  const b = Math.min(255, parseInt(hex.slice(5,7),16) + amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+/* ============================================================
+   DRAW
+   ============================================================ */
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // — Background —
+  if (!lightMode) {
+    const bg = ctx.createRadialGradient(
+      canvas.width/2, canvas.height/2, 0,
+      canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * 0.7
+    );
+    bg.addColorStop(0, '#060626');
+    bg.addColorStop(1, '#00010f');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Stars
+    for (const s of stars) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+      ctx.fill();
+    }
+  } else {
+    ctx.fillStyle = '#eef0fc';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  const scale = getScale();
+
+  // — Orbit rings —
+  for (const key of PKEYS) {
+    if (key === 'earth') continue;
+    const p = PLANETS[key];
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, p.a * scale, 0, Math.PI * 2);
+    ctx.strokeStyle = lightMode ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.055)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // — Sun —
+  const sp = w2c(0, 0);
+  // Outer glow
+  const sunGlow = ctx.createRadialGradient(sp.x, sp.y, 6, sp.x, sp.y, 55);
+  sunGlow.addColorStop(0, 'rgba(255,200,30,0.22)');
+  sunGlow.addColorStop(0.5, 'rgba(255,140,0,0.08)');
+  sunGlow.addColorStop(1, 'transparent');
+  ctx.beginPath();
+  ctx.arc(sp.x, sp.y, 55, 0, Math.PI * 2);
+  ctx.fillStyle = sunGlow;
+  ctx.fill();
+  // Body
+  const sunBody = ctx.createRadialGradient(sp.x - 5, sp.y - 5, 2, sp.x, sp.y, 18);
+  sunBody.addColorStop(0, '#fffce0');
+  sunBody.addColorStop(0.4, '#ffd700');
+  sunBody.addColorStop(0.85, '#ff8c00');
+  sunBody.addColorStop(1, 'transparent');
+  ctx.beginPath();
+  ctx.arc(sp.x, sp.y, 18, 0, Math.PI * 2);
+  ctx.fillStyle = sunBody;
+  ctx.fill();
+
+  // — Closest-planet dashed line —
+  if (closestKey && positions.earth && positions[closestKey]) {
+    const ep = w2c(positions.earth.x, positions.earth.y);
+    const cp = w2c(positions[closestKey].x, positions[closestKey].y);
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(ep.x, ep.y);
+    ctx.lineTo(cp.x, cp.y);
+    ctx.strokeStyle = lightMode ? '#009900' : '#39ff14';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.8;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // — Planets —
+  for (const key of PKEYS) {
+    const pos = positions[key];
+    if (!pos) continue;
+    const pd = PLANETS[key];
+    const cp = w2c(pos.x, pos.y);
+    const pr = pd.r;
+
+    // Closest-planet glow ring
+    if (key === closestKey) {
+      ctx.beginPath();
+      ctx.arc(cp.x, cp.y, pr + 9, 0, Math.PI * 2);
+      ctx.strokeStyle = lightMode ? 'rgba(0,120,0,0.55)' : 'rgba(57,255,20,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Hover / selected ring
+    if (key === hoveredKey || key === selectedKey) {
+      ctx.beginPath();
+      ctx.arc(cp.x, cp.y, pr + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0,212,255,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Saturn rings (drawn behind planet)
+    if (key === 'saturn') {
+      ctx.save();
+      ctx.translate(cp.x, cp.y);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, pr * 2.3, pr * 0.6, 0.28, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(228,209,145,0.45)';
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Planet body gradient
+    const grad = ctx.createRadialGradient(
+      cp.x - pr * 0.35, cp.y - pr * 0.35, 0,
+      cp.x, cp.y, pr
+    );
+    grad.addColorStop(0, hexBright(pd.color, 50));
+    grad.addColorStop(1, pd.color);
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, pr, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Label
+    ctx.font = '9px "Share Tech Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = lightMode ? 'rgba(20,30,80,0.7)' : 'rgba(180,210,255,0.65)';
+    ctx.fillText(pd.name.toUpperCase(), cp.x, cp.y + pr + 13);
+  }
+}
+
+/* ============================================================
+   SIMULATION LOOP
+   ============================================================ */
+function tick(now) {
+  const dtSec = (now - lastTick) / 1000;
+  lastTick = now;
+
+  if (simSpeed > 0) {
+    simDate = new Date(simDate.getTime() + simSpeed * dtSec * 86400000);
+  }
+
+  // Recalculate positions every frame
+  for (const key of PKEYS) {
+    positions[key] = planetPos(key, simDate);
+  }
+
+  // Update UI every 5 frames
+  frameN++;
+  if (frameN % 5 === 0) {
+    refreshDistances();
+    updateUIDisplays();
+    checkAlerts();
+  }
+
+  draw();
+  requestAnimationFrame(tick);
+}
+
+/* ============================================================
+   DISTANCE CALCULATION & RANKINGS
+   ============================================================ */
+function refreshDistances() {
+  const earth = positions.earth;
+  if (!earth) return;
+  distances = PKEYS
+    .filter(k => k !== 'earth')
+    .map(k => {
+      const p = positions[k];
+      const dx = p.x - earth.x;
+      const dy = p.y - earth.y;
+      const au = Math.hypot(dx, dy);
+      return { key:k, name:PLANETS[k].name, au, mkm:auToMkm(au) };
+    })
+    .sort((a, b) => a.au - b.au);
+  closestKey = distances[0]?.key ?? null;
+}
+
+/* ============================================================
+   UI UPDATES
+   ============================================================ */
+function updateUIDisplays() {
+  // Date
+  document.getElementById('sim-date').textContent =
+    'SIM: ' + simDate.toISOString().slice(0,10).replace(/-/g,'.');
+
+  // Closest callout
+  if (distances.length) {
+    const c = distances[0];
+    document.getElementById('closest-name').textContent = c.name.toUpperCase();
+    document.getElementById('closest-dist').innerHTML =
+      `<span>${c.au.toFixed(4)} AU</span> &nbsp;/&nbsp; ${c.mkm.toFixed(2)} M km`;
+  }
+
+  // Planet list
+  const listEl = document.getElementById('planet-list');
+  listEl.innerHTML = '';
+  distances.forEach((d, i) => {
+    const row = document.createElement('div');
+    row.className = 'prow' + (d.key === closestKey ? ' is-closest' : '');
+    row.innerHTML = `
+      <span class="prow-rank">${i+1}</span>
+      <span class="prow-dot" style="background:${PLANETS[d.key].color}"></span>
+      <span class="prow-name">${d.name}</span>
+      <div class="prow-dists">
+        <div>${d.au.toFixed(3)} AU</div>
+        <div>${d.mkm.toFixed(1)} M km</div>
+      </div>`;
+    row.addEventListener('click', () => openCard(d.key));
+    listEl.appendChild(row);
+  });
+}
+
+/* ============================================================
+   PLANET CARD
+   ============================================================ */
+function openCard(key) {
+  const pd = PLANETS[key];
+  selectedKey = key;
+  document.getElementById('card-name').textContent = pd.name;
+  document.getElementById('card-name').style.color  = pd.color;
+  document.getElementById('card-desc').textContent  = pd.desc;
+
+  const dist = distances.find(d => d.key === key);
+  const distLine = dist
+    ? `<div class="cstat"><span class="cstat-k">DIST (NOW)</span><span class="cstat-v">${dist.au.toFixed(4)} AU</span></div>`
+    : '';
+
+  document.getElementById('card-stats').innerHTML = `
+    ${distLine}
+    <div class="cstat"><span class="cstat-k">MASS</span>       <span class="cstat-v">${pd.mass}</span></div>
+    <div class="cstat"><span class="cstat-k">RADIUS</span>     <span class="cstat-v">${pd.radiusKm}</span></div>
+    <div class="cstat"><span class="cstat-k">MOONS</span>      <span class="cstat-v">${pd.moons}</span></div>
+    <div class="cstat"><span class="cstat-k">TEMP</span>       <span class="cstat-v">${pd.temp}</span></div>
+    <div class="cstat"><span class="cstat-k">ORB PERIOD</span> <span class="cstat-v">${pd.period}</span></div>
+    <div class="cstat"><span class="cstat-k">SEMI-MAJOR a</span><span class="cstat-v">${pd.a} AU</span></div>`;
+
+  document.getElementById('planet-card').classList.add('open');
+  document.getElementById('planet-card').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+document.getElementById('card-close').addEventListener('click', () => {
+  document.getElementById('planet-card').classList.remove('open');
+  selectedKey = null;
+});
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+const alertsWrap = document.getElementById('alerts-wrap');
+
+function logAlert(msg, cls) {
+  const ts = simDate.toISOString().slice(0,10);
+  const el = document.createElement('div');
+  el.className = `alog ${cls}`;
+  el.textContent = `[${ts}] ${msg}`;
+  alertsWrap.insertBefore(el, alertsWrap.firstChild);
+  // Keep max 40 entries
+  while (alertsWrap.children.length > 40) alertsWrap.removeChild(alertsWrap.lastChild);
+}
+
+function checkAlerts() {
+  for (const d of distances) {
+    if (d.key === 'earth') continue;
+    const threshold = CLOSE_AU[d.key];
+    if (!threshold) continue;
+    const wasIn = alertState[d.key];
+    const isIn  = d.au < threshold;
+    if (isIn && !wasIn) {
+      alertState[d.key] = true;
+      logAlert(`⚠ ${d.name} within ${d.au.toFixed(3)} AU`, 'warn');
+      pushNotify(`${d.name} Close Approach`,
+        `${d.name} is ${d.au.toFixed(3)} AU from Earth (${d.mkm.toFixed(1)} M km)`);
+    } else if (!isIn && wasIn) {
+      alertState[d.key] = false;
+      logAlert(`✓ ${d.name} moved past threshold`, 'ok');
+    }
+  }
+}
+
+/* ============================================================
+   SPEED SLIDER
+   ============================================================ */
+const slider   = document.getElementById('speed-slider');
+const speedVal = document.getElementById('speed-val');
+
+// 0 → 0 days/s (paused); 100 → 1095 days/s (3 yr/s)
+function sliderSpeed(v) {
+  if (v === 0) return 0;
+  return Math.pow(v / 100, 2.2) * 1095;
+}
+
+function updateSpeedLabel() {
+  const v = parseInt(slider.value);
+  simSpeed = sliderSpeed(v);
+  if (simSpeed === 0)       speedVal.textContent = 'PAUSED';
+  else if (simSpeed < 1)    speedVal.textContent = `${simSpeed.toFixed(3)}d/s`;
+  else if (simSpeed < 30)   speedVal.textContent = `${simSpeed.toFixed(2)}d/s`;
+  else if (simSpeed < 365)  speedVal.textContent = `${simSpeed.toFixed(1)}d/s`;
+  else                      speedVal.textContent = `${(simSpeed/365).toFixed(2)}yr/s`;
+}
+
+slider.addEventListener('input', updateSpeedLabel);
+slider.value = 8;
+updateSpeedLabel();
+
+/* ============================================================
+   TODAY BUTTON
+   ============================================================ */
+document.getElementById('btn-today').addEventListener('click', () => {
+  simDate = new Date();
+  logAlert('▶ Snapped to real current date', 'ok');
+});
+
+/* ============================================================
+   THEME TOGGLE
+   ============================================================ */
+document.getElementById('btn-theme').addEventListener('click', () => {
+  lightMode = !lightMode;
+  document.documentElement.setAttribute('data-theme', lightMode ? 'light' : '');
+  document.getElementById('btn-theme').textContent = lightMode ? '🌑 DARK' : '☀ LIGHT';
+});
+
+/* ============================================================
+   PUSH NOTIFICATIONS
+   ============================================================ */
+async function requestNotifs() {
+  if (!('Notification' in window)) {
+    logAlert('✗ Browser does not support notifications', 'danger');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    notifsOn = true;
+    document.getElementById('btn-notif').classList.add('active');
+    logAlert('▶ Push notifications enabled', 'ok');
+  } else {
+    logAlert('✗ Notification permission denied', 'danger');
+  }
+}
+
+function pushNotify(title, body) {
+  if (!notifsOn) return;
+  try {
+    new Notification(title, { body,
+      icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="%2300d4ff"/><circle cx="32" cy="32" r="14" fill="%2300010f"/></svg>'
+    });
+  } catch(e) { /* silent */ }
+}
+
+document.getElementById('btn-notif').addEventListener('click', requestNotifs);
+
+/* ============================================================
+   NASA NeoWs API
+   ============================================================ */
+async function fetchNEOs() {
+  const today = new Date();
+  const s = today.toISOString().slice(0,10);
+  const e = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0,10);
+  const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${s}&end_date=${e}&api_key=DEMO_KEY`;
+
+  try {
+    const res  = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const neos = [];
+    for (const dk of Object.keys(data.near_earth_objects)) {
+      for (const obj of data.near_earth_objects[dk]) {
+        const ca = obj.close_approach_data?.[0] ?? {};
+        neos.push({
+          name:    obj.name.replace(/[()]/g,'').trim(),
+          date:    ca.close_approach_date ?? dk,
+          missKm:  parseFloat(ca.miss_distance?.kilometers ?? 0),
+          dMin:    parseFloat(obj.estimated_diameter?.meters?.estimated_diameter_min ?? 0),
+          dMax:    parseFloat(obj.estimated_diameter?.meters?.estimated_diameter_max ?? 0),
+          hazard:  obj.is_potentially_hazardous_asteroid,
+        });
+      }
+    }
+    neos.sort((a,b) => a.missKm - b.missKm);
+    neoList = neos;
+    renderNEOs();
+
+    const hz = neos.filter(n => n.hazard);
+    if (hz.length) {
+      logAlert(`⚠ ${hz.length} HAZARDOUS NEO(s) detected this week!`, 'danger');
+      pushNotify('Hazardous NEO Alert',
+        `${hz.length} potentially hazardous asteroids approach Earth this week!`);
+    } else {
+      logAlert(`▶ NEO feed updated — ${neos.length} objects (7-day window)`, 'ok');
+    }
+  } catch (err) {
+    const feedEl = document.getElementById('neo-feed');
+    feedEl.innerHTML = `
+      <div class="alog danger">✗ NEO FETCH ERROR</div>
+      <div class="alog info">${err.message}</div>
+      <div class="alog info">DEMO_KEY rate-limited (1,000 req/day).<br>Retrying in 10 min…</div>`;
+    logAlert(`✗ NEO API error: ${err.message}`, 'danger');
+  }
+}
+
+function renderNEOs() {
+  const el = document.getElementById('neo-feed');
+  if (!neoList.length) {
+    el.innerHTML = '<div class="alog info">No NEO data available</div>';
+    return;
+  }
+  el.innerHTML = '';
+  const show = neoList.slice(0, 9);
+  for (const neo of show) {
+    const miss = neo.missKm < 1e6
+      ? `${(neo.missKm / 1000).toFixed(0)} K km`
+      : `${(neo.missKm / 1e6).toFixed(3)} M km`;
+    const div = document.createElement('div');
+    div.className = 'neo-item';
+    div.innerHTML = `
+      <div class="neo-header">
+        <span class="neo-name">${neo.name}</span>
+        <span class="neo-badge ${neo.hazard ? 'hz' : 'ok'}">${neo.hazard ? '⚠ HAZARDOUS' : '✓ SAFE'}</span>
+      </div>
+      <div class="neo-info">
+        📅 ${neo.date}<br>
+        📏 Ø ${neo.dMin.toFixed(0)}–${neo.dMax.toFixed(0)} m<br>
+        🎯 ${miss}
+      </div>`;
+    el.appendChild(div);
+  }
+}
+
+/* ============================================================
+   CANVAS INTERACTION
+   ============================================================ */
+function hitTest(mx, my) {
+  for (const key of PKEYS) {
+    const pos = positions[key];
+    if (!pos) continue;
+    const cp = w2c(pos.x, pos.y);
+    const pd = PLANETS[key];
+    if (Math.hypot(mx - cp.x, my - cp.y) <= pd.r + 7) return key;
+  }
+  return null;
+}
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width  / rect.width;
+  const sy = canvas.height / rect.height;
+  return { mx: (e.clientX - rect.left) * sx, my: (e.clientY - rect.top) * sy };
+}
+
+canvas.addEventListener('mousemove', e => {
+  const { mx, my } = canvasCoords(e);
+  hoveredKey = hitTest(mx, my);
+  canvas.style.cursor = hoveredKey ? 'pointer' : 'default';
+});
+
+canvas.addEventListener('click', e => {
+  const { mx, my } = canvasCoords(e);
+  const hit = hitTest(mx, my);
+  if (hit) openCard(hit);
+});
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width  / rect.width;
+  const sy = canvas.height / rect.height;
+  const mx = (t.clientX - rect.left) * sx;
+  const my = (t.clientY - rect.top)  * sy;
+  const hit = hitTest(mx, my);
+  if (hit) openCard(hit);
+}, { passive: false });
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+resizeCanvas();
+
+// Initial position calculation
+for (const key of PKEYS) positions[key] = planetPos(key, simDate);
+refreshDistances();
+updateUIDisplays();
+
+logAlert('▶ NASA JPL Keplerian orbit engine initialised', 'ok');
+logAlert('▶ Fetching NeoWs 7-day window…', 'info');
+
+fetchNEOs();
+setInterval(fetchNEOs, 10 * 60 * 1000); // refresh every 10 min
+
+lastTick = performance.now();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
